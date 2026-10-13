@@ -42,30 +42,62 @@ def dashboard_data():
                 avg_humidity=round(float(df.humidity.mean()), 1),
                 avg_rainfall=round(float(df.rainfall.mean()), 1), avg_ph=round(float(df.ph.mean()), 2))
 
+
+
 def get_weather(city):
     try:
-        r = requests.get("https://geocoding-api.open-meteo.com/v1/search",
-                         params={"name": city, "count": 1, "language": "en", "format": "json"}, timeout=8)
-        r.raise_for_status()
-        results = r.json().get("results", [])
-        if not results: return {"error": f"Could not find '{city}'. Try another city."}
-        p = results[0]
-        r = requests.get("https://api.open-meteo.com/v1/forecast", params={
-            "latitude": p["latitude"], "longitude": p["longitude"],
-            "current": "temperature_2m,relative_humidity_2m,precipitation,rain,wind_speed_10m", "timezone": "auto"
-        }, timeout=8)
-        r.raise_for_status(); current = r.json().get("current", {})
-        return {"city": f'{p["name"]}, {p.get("country", "")}', "temperature": current.get("temperature_2m", "—"),
-                "humidity": current.get("relative_humidity_2m", "—"), "rain": current.get("rain", current.get("precipitation", "—")),
-                "wind": current.get("wind_speed_10m", "—"), "time": current.get("time", "")}
-    except requests.RequestException:
-        return {"error": "Weather service unavailable. Check internet and try again."}
+        response = requests.get(
+            "https://geocoding-api.open-meteo.com/v1/search",
+            params={
+                "name": city,
+                "count": 1,
+                "language": "en",
+                "format": "json"
+            },
+            timeout=20
+        )
+        response.raise_for_status()
 
-ensure_model()
-model = joblib.load(MODEL_FILE)
-init_db()
+        results = response.json().get("results", [])
 
-@app.route("/", methods=["GET", "POST"])
+        if not results:
+            return {"error": f"City '{city}' not found. Try another city."}
+
+        place = results[0]
+
+        response = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": place["latitude"],
+                "longitude": place["longitude"],
+                "current": "temperature_2m,relative_humidity_2m,precipitation,rain,wind_speed_10m",
+                "timezone": "auto"
+            },
+            timeout=20
+        )
+        response.raise_for_status()
+
+        current = response.json().get("current", {})
+
+        return {
+            "city": f'{place["name"]}, {place.get("country", "")}',
+            "temperature": current.get("temperature_2m", "—"),
+            "humidity": current.get("relative_humidity_2m", "—"),
+            "rain": current.get("rain", current.get("precipitation", "—")),
+            "wind": current.get("wind_speed_10m", "—"),
+            "time": current.get("time", "")
+        }
+
+    except requests.RequestException as e:
+        print(f"Weather API error: {e}")
+        return {
+            "error": "Weather data could not be loaded. Please try again later."
+        }
+    except (ValueError, KeyError, TypeError) as e:
+        print(f"Weather data error: {e}")
+        return {
+            "error": "Invalid weather data received. Please try again."
+        }
 def home():
     prediction = error = None; submitted = {}
     if request.method == "POST":
