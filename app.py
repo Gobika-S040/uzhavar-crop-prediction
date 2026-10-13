@@ -98,7 +98,12 @@ def get_weather(city):
         return {
             "error": "Invalid weather data received. Please try again."
         }
- @app.route("/", methods=["GET", "POST"])
+ensure_model()
+model = joblib.load(MODEL_FILE)
+init_db()
+
+
+@app.route("/", methods=["GET", "POST"])
 def home():
     prediction = error = None; submitted = {}
     if request.method == "POST":
