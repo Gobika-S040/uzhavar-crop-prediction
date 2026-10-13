@@ -94,6 +94,6 @@ def history_page():
     with db() as c: rows = c.execute("SELECT * FROM history ORDER BY id DESC LIMIT 100").fetchall()
     return render_template("history.html", history=rows)
 
-```
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
