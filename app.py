@@ -44,60 +44,59 @@ def dashboard_data():
 
 
 
+
 def get_weather(city):
     try:
-        response = requests.get(
+        # Step 1: Find the city coordinates
+        geo = requests.get(
             "https://geocoding-api.open-meteo.com/v1/search",
-            params={
-                "name": city,
-                "count": 1,
-                "language": "en",
-                "format": "json"
-            },
-            timeout=20
+            params={"name": city, "count": 1, "language": "en"},
+            timeout=30
         )
-        response.raise_for_status()
+        geo.raise_for_status()
+        places = geo.json().get("results", [])
 
-        results = response.json().get("results", [])
+        if not places:
+            return {"error": "City not found. Enter a valid city name."}
 
-        if not results:
-            return {"error": f"City '{city}' not found. Try another city."}
+        place = places[0]
 
-        place = results[0]
-
-        response = requests.get(
+        # Step 2: Get current weather
+        res = requests.get(
             "https://api.open-meteo.com/v1/forecast",
             params={
                 "latitude": place["latitude"],
                 "longitude": place["longitude"],
-                "current": "temperature_2m,relative_humidity_2m,precipitation,rain,wind_speed_10m",
+                "current": (
+                    "temperature_2m,relative_humidity_2m,"
+                    "precipitation,wind_speed_10m"
+                ),
                 "timezone": "auto"
             },
-            timeout=20
+            timeout=30
         )
-        response.raise_for_status()
+        res.raise_for_status()
+        current = res.json().get("current", {})
 
-        current = response.json().get("current", {})
+        if not current:
+            return {"error": "Weather data is temporarily unavailable."}
 
         return {
             "city": f'{place["name"]}, {place.get("country", "")}',
             "temperature": current.get("temperature_2m", "—"),
             "humidity": current.get("relative_humidity_2m", "—"),
-            "rain": current.get("rain", current.get("precipitation", "—")),
+            "rain": current.get("precipitation", "—"),
             "wind": current.get("wind_speed_10m", "—"),
             "time": current.get("time", "")
         }
 
     except requests.RequestException as e:
-        print(f"Weather API error: {e}")
-        return {
-            "error": "Weather data could not be loaded. Please try again later."
-        }
+        print("Weather API connection error:", repr(e))
+        return {"error": "Weather service connection failed. Please try again."}
     except (ValueError, KeyError, TypeError) as e:
-        print(f"Weather data error: {e}")
-        return {
-            "error": "Invalid weather data received. Please try again."
-        }
+        print("Weather data error:", repr(e))
+        return {"error": "Could not read weather data."}
+
 ensure_model()
 model = joblib.load(MODEL_FILE)
 init_db()
